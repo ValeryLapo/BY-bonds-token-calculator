@@ -1,42 +1,34 @@
-﻿namespace Token;
+﻿namespace Calculator.Core;
 
-internal class PeriodCalculator
+public class PeriodCalculator
 {
-	public List<CalculatePeriod> GetPeriods(BondData data)
+	public List<HoldingPeriod> GetPeriods(Token data)
 	{
-		List<CalculatePeriod> periods = data.Period switch
+		List<HoldingPeriod> periods = data.CouponFrequency switch
 		{
-			Period.Month => CalculateMonthly(data),
-			Period.Quarter => CalculateQuarterly(data),
+			CouponFrequency.Month=> CalculateMonthly(data),
+            CouponFrequency.Quoter=> CalculateQuarterly(data),
 			_ => throw new ArgumentOutOfRangeException()
 		};
 		return periods;
 	}
 
-	private List<CalculatePeriod> CalculateQuarterly(BondData data)
+	private List<HoldingPeriod> CalculateQuarterly(Token data)
 	{
-		var periods = new List<CalculatePeriod>();
-
-		var firstPeriod = new CalculatePeriod()
-		{
-			Start = data.BuyDate,
-			End = GetQuarterEnd(data.BuyDate),
-		};
+		var periods = new List<HoldingPeriod>();
+        var firstPeriod = new HoldingPeriod(data.AcquisitionDate, GetQuarterEnd(data.AcquisitionDate));
 		periods.Add(firstPeriod);
 
-		var currentDate = data.BuyDate;
+		var currentDate = data.AcquisitionDate;
 		while (true)
 		{
 			currentDate = currentDate.AddMonths(3);
 
-			var period = new CalculatePeriod()
+            var period = new HoldingPeriod(GetQuarterStart(currentDate), GetQuarterEnd(currentDate));
+
+			if (period.End > data.MaturityDate)
 			{
-				Start = GetQuarterStart(currentDate),
-				End = GetQuarterEnd(currentDate)
-			};
-			if (period.End > data.YieldDate)
-			{
-				period.End = data.YieldDate;
+                period = new HoldingPeriod(GetQuarterStart(currentDate), data.MaturityDate);
 				periods.Add(period);
 				break;
 			}
@@ -48,47 +40,28 @@ internal class PeriodCalculator
 		return periods;
 	}
 
-	private DateTime GetQuarterStart(DateTime date)
+	
+
+	private List<HoldingPeriod> CalculateMonthly(Token data)
 	{
-		switch (date.Month)
-		{
-			case 1 or 2 or 3:
-				return new DateTime(date.Year, 1, 1);
-			case 4 or 5 or 6:
-				return new DateTime(date.Year, 4, 1);
-			case 7 or 8 or 9:
-				return new DateTime(date.Year, 7, 1);
-			case 10 or 11 or 12:
-				return new DateTime(date.Year, 10, 1);
-		}
+		var periods = new List<HoldingPeriod>();
 
-		throw new Exception("Unreal");
-	}
-
-	private List<CalculatePeriod> CalculateMonthly(BondData data)
-	{
-		var periods = new List<CalculatePeriod>();
-
-		var firstPeriod = new CalculatePeriod()
-		{
-			Start = data.BuyDate,
-			End = new DateTime(data.BuyDate.Year, data.BuyDate.Month,
-				DateTime.DaysInMonth(data.BuyDate.Year, data.BuyDate.Month)),
-		};
+        var firstPeriod = new HoldingPeriod(data.AcquisitionDate, new DateTime(data.AcquisitionDate.Year,
+            data.AcquisitionDate.Month,
+            DateTime.DaysInMonth(data.AcquisitionDate.Year, data.AcquisitionDate.Month)));
 		periods.Add(firstPeriod);
-		var currentDate = data.BuyDate;
-		while (currentDate < data.YieldDate)
+		var currentDate = data.AcquisitionDate;
+		while (currentDate < data.MaturityDate)
 		{
 			currentDate = currentDate.AddMonths(1);
 
-			var period = new CalculatePeriod()
+            DateTime startDate = new DateTime(currentDate.Year, currentDate.Month, 1);
+            var period = new HoldingPeriod(startDate,
+                new DateTime(currentDate.Year, currentDate.Month,
+                    DateTime.DaysInMonth(currentDate.Year, currentDate.Month)));
+			if (period.End > data.MaturityDate)
 			{
-				Start = new DateTime(currentDate.Year, currentDate.Month, 1),
-				End = new DateTime(currentDate.Year, currentDate.Month, DateTime.DaysInMonth(currentDate.Year, currentDate.Month))
-			};
-			if (period.End > data.YieldDate)
-			{
-				period.End = data.YieldDate;
+                period = new HoldingPeriod(startDate, data.MaturityDate);
 				periods.Add(period);
 				break;
 			}
@@ -99,20 +72,16 @@ internal class PeriodCalculator
 		}
 		return periods;
 	}
-	private DateTime GetQuarterEnd(DateTime date)
+    public DateTime GetQuarterStart(DateTime date)
+    {
+        int quarter = (date.Month -1) / 3 + 1;
+        DateTime start = new DateTime(date.Year, (quarter - 1) * 3 + 1, 1);
+		return start;
+    }
+    public DateTime GetQuarterEnd(DateTime date)
 	{
-		switch (date.Month)
-		{
-			case 1 or 2 or 3:
-				return new DateTime(date.Year, 3, 31);
-			case 4 or 5 or 6:
-				return new DateTime(date.Year, 6, 30);
-			case 7 or 8 or 9:
-				return new DateTime(date.Year, 9, 30);
-			case 10 or 11 or 12:
-				return new DateTime(date.Year, 12, 31);
-		}
-
-		throw new Exception("Unreal");
+        int quarter = (date.Month -1) / 3 + 1;
+        DateTime quarterStart = GetQuarterStart(date);
+        return quarterStart.AddMonths(3).AddDays(-1);
 	}
 }
